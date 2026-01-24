@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Climate Service - Вход</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-box">
+            <div class="login-header">
+                <h2><i class="fas fa-tools"></i> Climate Service</h2>
+                <p>Вход в систему учета заявок</p>
+            </div>
+
+            <form id="login-form">
+                <div class="form-group">
+                    <label><i class="fas fa-user"></i> Логин:</label>
+                    <input type="text" id="login" name="login" class="form-control" required 
+                           placeholder="Введите логин">
+                </div>
+
+                <div class="form-group">
+                    <label><i class="fas fa-lock"></i> Пароль:</label>
+                    <input type="password" id="password" name="password" class="form-control" required
+                           placeholder="Введите пароль">
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-block">
+                    <i class="fas fa-sign-in-alt"></i> Войти
+                </button>
+
+                <div id="error-message" class="error-message"></div>
+            </form>
+
+            <div class="demo-credentials">
+                <h4><i class="fas fa-info-circle"></i> Демо доступы:</h4>
+                <div class="demo-grid">
+                    <div class="demo-card">
+                        <h5>Менеджер</h5>
+                        <p><strong>Логин:</strong> login1</p>
+                        <p><strong>Пароль:</strong> pass1</p>
+                    </div>
+                    <div class="demo-card">
+                        <h5>Специалист</h5>
+                        <p><strong>Логин:</strong> login2</p>
+                        <p><strong>Пароль:</strong> pass2</p>
+                    </div>
+                    <div class="demo-card">
+                        <h5>Заказчик</h5>
+                        <p><strong>Логин:</strong> login6</p>
+                        <p><strong>Пароль:</strong> pass6</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Обработка формы входа
+        document.getElementById('login-form').onsubmit = async function(e) {
+            e.preventDefault();
+            
+            const login = document.getElementById('login').value;
+            const password = document.getElementById('password').value;
+            const errorElement = document.getElementById('error-message');
+            
+            errorElement.textContent = '';
+            
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ login, password })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Сохраняем данные пользователя
+                    localStorage.setItem('user', JSON.stringify(data.user));
+                    localStorage.setItem('token', data.token);
+                    
+                    // Перенаправляем на главную
+                    window.location.href = 'index.html';
+                } else {
+                    errorElement.textContent = data.error || 'Ошибка входа';
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                errorElement.textContent = 'Ошибка сети';
+            }
+        };
+    </script>
+</body>
+</html>

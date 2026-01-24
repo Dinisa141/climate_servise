@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Climate Service - Главная</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <!-- Навигация -->
+    <nav class="navbar">
+        <div class="container">
+            <h1><i class="fas fa-tools"></i> Climate Service</h1>
+            <div class="nav-links">
+                <a href="index.html" class="active"><i class="fas fa-home"></i> Главная</a>
+                <a href="requests.html"><i class="fas fa-clipboard-list"></i> Заявки</a>
+                <div id="user-menu" class="user-menu">
+                    <!-- Будет заполнено через JS -->
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Основной контент -->
+    <div class="container">
+        <div id="content">
+            <div class="welcome-card">
+                <h2>Добро пожаловать в Climate Service!</h2>
+                <p>Система учета заявок на ремонт климатического оборудования</p>
+            </div>
+
+            <div class="stats-grid" id="stats-grid">
+                <!-- Статистика будет загружена через JS -->
+            </div>
+
+            <div class="actions-grid">
+                <div class="action-card" onclick="window.location.href='requests.html'">
+                    <div class="action-icon">
+                        <i class="fas fa-clipboard-list"></i>
+                    </div>
+                    <h3>Все заявки</h3>
+                    <p>Просмотр и управление заявками</p>
+                </div>
+
+                <div class="action-card" onclick="createNewRequest()">
+                    <div class="action-icon">
+                        <i class="fas fa-plus-circle"></i>
+                    </div>
+                    <h3>Новая заявка</h3>
+                    <p>Создать заявку на ремонт</p>
+                </div>
+
+                <div class="action-card" onclick="window.location.href='users.html'">
+                    <div class="action-icon">
+                        <i class="fas fa-chart-bar"></i>
+                    </div>
+                    <h3>Статистика</h3>
+                    <p>Анализ и отчеты</p>
+                </div>
+            </div>
+
+            <div class="recent-requests">
+                <h3>Последние заявки</h3>
+                <div id="requests-list">
+                    <!-- Заявки будут загружены через JS -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно для создания заявки -->
+    <div id="create-modal" class="modal">
+        <div class="modal-content">
+            <h3>Новая заявка</h3>
+            <form id="create-form">
+                <div class="form-group">
+                    <label>Тип оборудования:</label>
+                    <select class="form-control" name="climate_tech_type" required>
+                        <option value="">Выберите тип</option>
+                        <option value="Кондиционер">Кондиционер</option>
+                        <option value="Увлажнитель воздуха">Увлажнитель воздуха</option>
+                        <option value="Сушилка для рук">Сушилка для рук</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Модель:</label>
+                    <input type="text" class="form-control" name="climate_tech_model" required>
+                </div>
+                <div class="form-group">
+                    <label>Описание проблемы:</label>
+                    <textarea class="form-control" name="problem_description" rows="3" required></textarea>
+                </div>
+                <div class="modal-buttons">
+                    <button type="button" onclick="closeModal()" class="btn btn-secondary">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Создать</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+    <script>
+        // Загрузка при старте
+        window.onload = function() {
+            checkAuth();
+            loadStats();
+            loadRecentRequests();
+        };
+
+        // Показать модальное окно
+        function createNewRequest() {
+            const user = JSON.parse(localStorage.getItem('user'));
+            if (user.role !== 'client') {
+                alert('Только заказчики могут создавать заявки');
+                return;
+            }
+            document.getElementById('create-modal').style.display = 'block';
+        }
+
+        // Закрыть модальное окно
+        function closeModal() {
+            document.getElementById('create-modal').style.display = 'none';
+        }
+
+        // Обработка формы создания заявки
+        document.getElementById('create-form').onsubmit = async function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(this);
+            const user = JSON.parse(localStorage.getItem('user'));
+            
+            const requestData = {
+                client_id: user.user_id,
+                climate_tech_type: formData.get('climate_tech_type'),
+                climate_tech_model: formData.get('climate_tech_model'),
+                problem_description: formData.get('problem_description')
+            };
+
+            try {
+                const response = await fetch('/api/requests', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    },
+                    body: JSON.stringify(requestData)
+                });
+
+                if (response.ok) {
+                    alert('Заявка создана успешно!');
+                    closeModal();
+                    loadRecentRequests();
+                } else {
+                    alert('Ошибка создания заявки');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Ошибка сети');
+            }
+        };
+    </script>
+</body>
+</html>

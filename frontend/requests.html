@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Climate Service - Заявки</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <h1><i class="fas fa-tools"></i> Climate Service</h1>
+            <div class="nav-links">
+                <a href="index.html"><i class="fas fa-home"></i> Главная</a>
+                <a href="requests.html" class="active"><i class="fas fa-clipboard-list"></i> Заявки</a>
+                <a href="users.html"><i class="fas fa-chart-bar"></i> Статистика</a>
+                <div id="user-menu" class="user-menu"></div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="page-header">
+            <h2><i class="fas fa-clipboard-list"></i> Управление заявками</h2>
+            <button onclick="window.location.href='index.html#create'" class="btn btn-primary">
+                <i class="fas fa-plus"></i> Новая заявка
+            </button>
+        </div>
+
+        <!-- Фильтры -->
+        <div class="filters-card">
+            <h3><i class="fas fa-filter"></i> Фильтры</h3>
+            <div class="filter-row">
+                <select id="status-filter" class="form-control" onchange="filterRequests()">
+                    <option value="">Все статусы</option>
+                    <option value="new">Новая</option>
+                    <option value="in_progress">В процессе</option>
+                    <option value="completed">Завершена</option>
+                </select>
+                <input type="text" id="search-input" class="form-control" placeholder="Поиск..." onkeyup="filterRequests()">
+            </div>
+        </div>
+
+        <!-- Таблица заявок -->
+        <div class="card">
+            <table class="table" id="requests-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Дата</th>
+                        <th>Оборудование</th>
+                        <th>Проблема</th>
+                        <th>Клиент</th>
+                        <th>Статус</th>
+                        <th>Действия</th>
+                    </tr>
+                </thead>
+                <tbody id="requests-body">
+                    <!-- Заявки будут загружены через JS -->
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Модальное окно редактирования -->
+        <div id="edit-modal" class="modal">
+            <div class="modal-content">
+                <h3>Редактирование заявки <span id="edit-id"></span></h3>
+                <form id="edit-form">
+                    <div class="form-group">
+                        <label>Статус:</label>
+                        <select id="edit-status" class="form-control" name="request_status">
+                            <option value="new">Новая</option>
+                            <option value="in_progress">В процессе</option>
+                            <option value="completed">Завершена</option>
+                        </select>
+                    </div>
+                    <div class="modal-buttons">
+                        <button type="button" onclick="closeEditModal()" class="btn btn-secondary">Отмена</button>
+                        <button type="submit" class="btn btn-primary">Сохранить</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+    <script>
+        let allRequests = [];
+        let currentEditId = null;
+
+        // Загрузка при старте
+        window.onload = async function() {
+            if (!checkAuth()) return;
+            await loadRequests();
+            updateUserMenu();
+        };
+
+        // Загрузка заявок
+        async function loadRequests() {
+            try {
+                const response = await fetch('/api/requests', {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    }
+                });
+                
+                if (response.ok) {
+                    allRequests = await response.json();
+                    displayRequests(allRequests);
+                } else {
+                    localStorage.removeItem('token');
+                    localStorage.removeItem('user');
+                    window.location.href = 'login.html';
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                showError('Ошибка загрузки данных');
+            }
+        }
+
+        // Отображение заявок
+        function displayRequests(requests) {
+            const tbody = document.getElementById('requests-body');
+            const user = JSON.parse(localStorage.getItem('user'));
+            
+            if (requests.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="text-center">
+                            <div class="empty-state">
+                                <i class="fas fa-inbox fa-2x"></i>
+                                <p>Нет заявок</p>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            let html = '';
+            requests.forEach(request => {
+                const statusClass = getStatusClass(request.request_status);
+                const statusText = getStatusText(request.request_status);
+                
+                html += `
+                    <tr>
+                        <td>#${request.request_id}</td>
+                        <td>${new Date(request.start_date).toLocaleDateString('ru-RU')}</td>
+                        <td>
+                            <strong>${request.climate_tech_type}</strong><br>
+                            <small>${request.climate_tech_model}</small>
+                        </td>
+                        <td>${request.problem_description}</td>
+                        <td>${request.client_name}</td>
+                        <td><span class="badge ${statusClass}">${statusText}</span></td>
+                        <td>
+                            <button onclick="viewRequest(${request.request_id})" class="btn btn-sm btn-primary">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            ${user.role === 'manager' || user.role === 'specialist' ? `
+                            <button onclick="editRequest(${request.request_id})" class="btn btn-sm btn-warning">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            ` : ''}
+                        </td>
+                    </tr>
+                `;
+            });
+            
+            tbody.innerHTML = html;
+        }
+
+        // Фильтрация заявок
+        function filterRequests() {
+            const statusFilter = document.getElementById('status-filter').value;
+            const searchFilter = document.getElementById('search-input').value.toLowerCase();
+            
+            let filtered = allRequests;
+            
+            if (statusFilter) {
+                filtered = filtered.filter(r => r.request_status === statusFilter);
+            }
+            
+            if (searchFilter) {
+                filtered = filtered.filter(r => 
+                    r.climate_tech_type.toLowerCase().includes(searchFilter) ||
+                    r.problem_description.toLowerCase().includes(searchFilter) ||
+                    r.client_name.toLowerCase().includes(searchFilter)
+                );
+            }
+            
+            displayRequests(filtered);
+        }
+
+        // Просмотр заявки
+        function viewRequest(id) {
+            window.location.href = `request-detail.html?id=${id}`;
+        }
+
+        // Редактирование заявки
+        function editRequest(id) {
+            currentEditId = id;
+            const request = allRequests.find(r => r.request_id === id);
+            
+            if (request) {
+                document.getElementById('edit-id').textContent = `#${id}`;
+                document.getElementById('edit-status').value = request.request_status;
+                document.getElementById('edit-modal').style.display = 'block';
+            }
+        }
+
+        // Закрыть модальное окно редактирования
+        function closeEditModal() {
+            document.getElementById('edit-modal').style.display = 'none';
+            currentEditId = null;
+        }
+
+        // Обработка формы редактирования
+        document.getElementById('edit-form').onsubmit = async function(e) {
+            e.preventDefault();
+            
+            const status = document.getElementById('edit-status').value;
+            
+            try {
+                const response = await fetch(`/api/requests/${currentEditId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    },
+                    body: JSON.stringify({ request_status: status })
+                });
+                
+                if (response.ok) {
+                    alert('Заявка обновлена!');
+                    closeEditModal();
+                    await loadRequests();
+                } else {
+                    alert('Ошибка обновления заявки');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Ошибка сети');
+            }
+        };
+
+        // Вспомогательные функции
+        function getStatusClass(status) {
+            const map = {
+                'new': 'badge-info',
+                'in_progress': 'badge-warning',
+                'completed': 'badge-success'
+            };
+            return map[status] || 'badge-secondary';
+        }
+
+        function getStatusText(status) {
+            const map = {
+                'new': 'Новая',
+                'in_progress': 'В процессе',
+                'completed': 'Завершена'
+            };
+            return map[status] || status;
+        }
+
+        // Закрытие модальных окон при клике вне
+        window.onclick = function(event) {
+            const modal = document.getElementById('edit-modal');
+            if (event.target === modal) {
+                closeEditModal();
+            }
+        };
+    </script>
+</body>
+</html>
